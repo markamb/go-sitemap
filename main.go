@@ -13,7 +13,7 @@ import (
 //		1. 	Add support for robots.txt (load and parse for the domain then use any filters requested)
 //		2. 	Improve display of the site map. For example, it may be useful to see the structure based on the URL path
 //			rather than based on the links present in each page
-//		3.
+//		3.	Add retry logic on HTTP requests where appropriate (e.g. 503 response code returned)
 //
 
 //
@@ -70,7 +70,7 @@ func main() {
 	//
 	// Write the site map to the screen
 	//
-	crawler.dump()
+	crawler.Print()
 }
 
 

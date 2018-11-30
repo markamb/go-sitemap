@@ -163,7 +163,7 @@ func (c *Crawler) monitorProgress()  {
 //
 func (c *Crawler) loadPages(loadTicker *time.Ticker)  {
 	for urlStr := range c.urlLoadChan {
-		page := c.docLoader.LoadUrl(urlStr)
+		page, err := c.docLoader.LoadUrl(urlStr)
 		if page != nil {
 			for link := range page.InternalLinks {
 				c.pendingItemsChan <- 1
@@ -171,6 +171,7 @@ func (c *Crawler) loadPages(loadTicker *time.Ticker)  {
 			}
 			c.pagesChan <- page // send page details to be ingested into site map
 		} else {
+			log.Printf("TRACE : Ignoring Url : %v", err)
 			c.pendingItemsChan <- -1
 		}
 		if loadTicker != nil {
@@ -243,7 +244,7 @@ func (c *Crawler) dequeueUrls() {
 //
 // dump: writes the site map to the console
 //
-func (c *Crawler) dump() error {
+func (c *Crawler) Print() error {
 
 	// create a channel for the site map contents and a goroutine to populate it
 	mapChan := make(chan MapTraversalNode, 2)

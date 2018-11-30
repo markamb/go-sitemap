@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -16,7 +17,7 @@ type DocumentLoader interface {
 	// LoadUrl method loads a URL supplied as a string and returns a WebPage representing its contents
 	// Only HTML documents are processed, with all other types being ignored.
 	//
-	LoadUrl(urlStr string) *WebPage
+	LoadUrl(urlStr string) (*WebPage, error)
 
 }
 
@@ -38,25 +39,25 @@ func CreateDocumentLoader(p DocumentParser) *DocLoader {
 
 
 // loadUrl loads then parses a we document. See DocumentLoader interface for details.
-func (loader *DocLoader) LoadUrl(urlStr string) *WebPage {
+func (loader *DocLoader) LoadUrl(urlStr string) (*WebPage, error) {
 	start := time.Now()
 	resp, err := http.Get(urlStr)
 	if err != nil {
-		log.Printf("WARN: Failed to load Url (%v) : %v\n", urlStr, err)
-		return nil
+		return nil, err
 	}
 	defer resp.Body.Close()
 	if contentType := resp.Header.Get("Content-Type"); !strings.HasPrefix(contentType, "text/html") {
-		log.Printf("TRACE: Ignoring content type %v for Url (%v)\n", contentType, urlStr)
-		return nil
+		return nil, fmt.Errorf("Unsupported content type %v for Url (%v)\n", contentType, urlStr)
 	}
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		log.Printf("WARN: Ignoring page, status code %d (%s) for Url (%v)\n", resp.StatusCode, resp.Status, urlStr)
-		return nil
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("Bad status code, status code %d (%s) for Url (%v)\n", resp.StatusCode, resp.Status, urlStr)
 	}
 	page, err := loader.parser.ParseDocument(urlStr, resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to parse contents for Url %s :%v \n", urlStr, err)
+	}
 
 	loadSecs := time.Since(start).Seconds()
 	log.Printf("INFO: Loaded and parsed %s in %f secs\n", urlStr, loadSecs)
-	return page
+	return page, nil
 }
