@@ -8,25 +8,21 @@ import (
 )
 
 //
-// SiteMap represents a graph representing all the links in a given website. The nodes of the graph are pages
+// SiteMap is a graph representing all the links in a given website. The nodes of the graph are pages
 // and the edges represent hyperlinks.
 // Note that there may be cycles in the graph (in fact this would be very common). For
 // example, a link from a child back up to its parent or the sites root page would be common. We capture
 // all this information while crawling however we choose not to display up-ward facing links when rendering
 // the site map.
 //
-// We store the graph nodes (pages) in a hash map to allow fast lookup, and the edges in the
-// nodes themselves (as a list of url links)
-//
-// Pages are keyed off the absolute urls.
-// Note that URLS are case sensitive.  While it would be unusual to come across 2 pages differing
-// only by case, we will treat them as 2 seperate pages.
+// We store the graph nodes (pages) in a hash map of urls, to allow fast lookup, and the edges in the
+// nodes themselves (as a list of urls)
 //
 // No locking is done on this structure and it is assumed no concurrent access will be be used.
 //
 
 //
-// WebPage represents a singe page in the website
+// WebPage represents a single page in the website
 // We only store internal links and the page title however this could easily be extended to add any
 // other useful information we want to crawl (list of all external links, page size etc)
 //
@@ -36,6 +32,7 @@ type WebPage struct {
 	InternalLinks	map[string]bool	// set of internal links out of this page (set as we only want each item once)
 }
 
+// CreateWebPage creates a new WebPage with a given URL and page title
 func CreateWebPage(urlStr string, title string) *WebPage {
 	return &WebPage{
 		Url:  urlStr,
@@ -52,6 +49,10 @@ type MapTraversalNode struct {
 	Depth	int			// the depth of the page at this point
 }
 
+//
+// SiteMapper is an interface used to store capture the structure of a website and traverse its
+// pages in a logic order.
+//
 type SiteMapper interface {
 
 	//

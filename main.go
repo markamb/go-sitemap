@@ -2,8 +2,10 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"net/url"
+	"strings"
 )
 
 //
@@ -53,9 +55,10 @@ func main() {
 	}
 
 	//
-	// Create and setup the crawlier
+	// Create and setup the site map and crawler
 	//
-	crawler := CreateCrawler(startUrl, CreateDocumentLoader(CreateDocumentParser()))
+	siteMap := CreateSiteMap(startUrl)
+	crawler := CreateCrawler(startUrl,CreateDocumentLoader(CreateDocumentParser()), siteMap)
 	crawler.minLoadDelay = *minLoadDelay
 	crawler.numLoaders = *numLoaders
 	crawler.maxPagesToLoad = *maxPages
@@ -70,8 +73,26 @@ func main() {
 	//
 	// Write the site map to the screen
 	//
-	crawler.Print()
+	PrintSite(startUrl.String(), siteMap)
 }
+
+// PrintSite writes the SiteMap contents to the console
+func PrintSite(domain string, site *SiteMap) {
+
+	// create a channel for the site map contents and a goroutine to populate it
+	mapChan := make(chan MapTraversalNode, 20)
+	go site.TraverseSiteMap(mapChan)
+
+	// Write out the results
+	fmt.Printf("\n\n ----- Site Map for website  %s -----\n", domain)
+	for page := range mapChan {
+		fmt.Printf("%s %s [%s]\n", strings.Repeat("    ", page.Depth), page.Page.Url, page.Page.Title)
+	}
+}
+
+
+
+
 
 
 

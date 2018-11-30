@@ -1,10 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net/url"
-	"strings"
 	"sync"
 	"time"
 )
@@ -19,7 +17,7 @@ type Crawler struct {
 	docLoader 		DocumentLoader
 
 	// Site Map used to store results
-	siteMap			*SiteMap
+	siteMap			SiteMapper
 
 	// url to start crawling from
 	startUrl		*url.URL
@@ -40,11 +38,11 @@ type Crawler struct {
 	finishedEventChan chan bool	// used to signal that crawling is complete
 }
 
-func CreateCrawler(start *url.URL, l DocumentLoader) *Crawler {
+func CreateCrawler(start *url.URL, l DocumentLoader, mapper SiteMapper) *Crawler {
 	return &Crawler {
 		docLoader:		l,
 		startUrl:		start,
-		siteMap:		CreateSiteMap(start),
+		siteMap:		mapper,
 		minLoadDelay:	1000,
 		numLoaders:		5,
 		maxPagesToLoad:	10,
@@ -66,11 +64,14 @@ func (c *Crawler) crawl() error {
 
 	//
 	// Kick off routines to load required pages, parse them, then add
-	// Note we throttle how quickly we load pages using a ticker to make sure
+	// Note we optionally throttle how quickly we load pages using a ticker to make sure
 	// we're not blacklisted or unpopular with the site owner
 	//
-	loadTicker := time.NewTicker(time.Duration(c.minLoadDelay) * time.Millisecond)
-	defer loadTicker.Stop()
+	var loadTicker *time.Ticker = nil
+	if c.minLoadDelay != 0 {
+		loadTicker = time.NewTicker(time.Duration(c.minLoadDelay) * time.Millisecond)
+		defer loadTicker.Stop()
+	}
 	for i := 0; i < c.numLoaders; i++ {
 		wg.Add(1)
 		go func() {
@@ -96,11 +97,11 @@ func (c *Crawler) crawl() error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		c.enqueueUrls()
+		c.enqueueNewUrls()
 	}()
 
 	//
-	// Another thread to dequeue items from the urlQueue and place them on a channel
+	// a goroutine to dequeue items from the internal queue and place them on a channel
 	// to be processed by our page loading worker threads
 	//
 	wg.Add(1)
@@ -110,8 +111,8 @@ func (c *Crawler) crawl() error {
 	}()
 
 	//
-	// Start a goroutine to track the number of items of work in progress or queued and to stop
-	// processing once this reaches zero
+	// Start a goroutine to track the number of items of work in progress or pendinf accross all channels and the
+	// internal queue and to stop processing once this reaches zero
 	//
 	wg.Add(1)
 	go func() {
@@ -156,7 +157,7 @@ func (c *Crawler) monitorProgress()  {
 }
 
 //
-// Read urls to be loaded from urlLoadChan, load and parse them sending results to
+// Read urls to be loaded from urlLoadChan, load and parse them, then send results to
 // output channels.
 // If loadTicker is supplied (not nil) we only load a new page after reading a tick (used
 // to throttle our rate of loading)
@@ -181,10 +182,10 @@ func (c *Crawler) loadPages(loadTicker *time.Ticker)  {
 }
 
 //
-// enqueueUrls: reads URLS extracted from web pages (from linksChan) and add them into the
+// enqueueNewUrls: reads URLS extracted from web pages (from linksChan) and add them into the
 // queue after checking for duplicates
 //
-func (c *Crawler) enqueueUrls() {
+func (c *Crawler) enqueueNewUrls() {
 	count := 0
 	seen := make(map[string]bool)
 	for link := range c.linksChan {
@@ -207,14 +208,12 @@ func (c *Crawler) enqueueUrls() {
 }
 
 //
-// populateSiteMap: reads pages off the pagesChan and adds them to the site map
+// populateSiteMap: reads pages off the pagesChan and add them to the site map
 //
 func (c *Crawler) populateSiteMap() {
 	for page := range c.pagesChan {
 		if err := c.siteMap.AddPage(page); err != nil {
 			log.Printf("WARN: %v\n", err)
-		} else {
-			c.siteMap.Pages[page.Url] = page
 		}
 		c.pendingItemsChan <- -1
 	}
@@ -236,28 +235,11 @@ func (c *Crawler) dequeueUrls() {
 				return
 			default:
 			}
-			time.Sleep(100 * time.Millisecond)	// there should be a better way than this?
+			time.Sleep(100 * time.Millisecond)
 		}
 	}
 }
 
-//
-// dump: writes the site map to the console
-//
-func (c *Crawler) Print() error {
-
-	// create a channel for the site map contents and a goroutine to populate it
-	mapChan := make(chan MapTraversalNode, 2)
-	go c.siteMap.TraverseSiteMap(mapChan)
-
-	// Write out the results
-	fmt.Printf("\n\n ----- Site Map for website  %s -----\n", c.siteMap.Domain)
-	for page := range mapChan {
-		fmt.Printf("%s %s [%s]\n", strings.Repeat("    ", page.Depth), page.Page.Url, page.Page.Title)
-	}
-
-	return nil
-}
 
 
 

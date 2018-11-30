@@ -13,6 +13,7 @@
 
 # .idea files
 .idea/workspace.xml
+.idea/dictionaries
 
 
 debug
