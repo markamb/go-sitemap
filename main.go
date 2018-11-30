@@ -26,6 +26,7 @@ const (
 	DftNumLoaders 	int 	= 5			// number of page loading and parsing threads
 	DftMinLoadDelay	int		= 1000		// minimum delay, in milliseconds, between each load
 	DftMaxPages		int		= 10		// number of pages to load
+	DftMaxDepth		int		= 0			// max depth to crawl site to
 )
 
 func main() {
@@ -37,6 +38,7 @@ func main() {
 	minLoadDelay := flag.Int("delay", DftMinLoadDelay, "minimum separation between initiating loads from the server")
 	numLoaders := flag.Int("loaders", DftNumLoaders, "maximum number of concurrent loads from the server")
 	maxPages := flag.Int("pages", DftMaxPages, "maximum number pages to load (0 for None)")
+	maxDepth := flag.Int("depth", DftMaxDepth, "maximum depth to crawl to (0 for None)")
 	flag.Parse()
 	if flag.NArg() > 0 {
 		flag.Usage()
@@ -62,6 +64,7 @@ func main() {
 	crawler.minLoadDelay = *minLoadDelay
 	crawler.numLoaders = *numLoaders
 	crawler.maxPagesToLoad = *maxPages
+	crawler.maxCrawlDepth = *maxDepth
 
 	//
 	// Crawl the website (this will block until crawling is complete)

@@ -8,38 +8,38 @@ import (
 
 func TestEmptyQueue(t *testing.T) {
 
-	q := StringQueue{}
+	q := HyperlinkQueue{}
 	if l := q.Len(); l != 0 {
 		t.Errorf("Incorrect length on empty queue: expected %d, got %d", 0, l)
 	}
 
-	if top, found := q.Pop(); found || len(top) > 0 {
-		t.Errorf("Pop from empty queue returned incorrect result: expected (, false), got (%s, %v)", top, found)
+	if top, found := q.Pop(); found || len(top.urlStr) > 0 {
+		t.Errorf("Pop from empty queue returned incorrect result: expected (, false), got (%s, %v)", top.urlStr, found)
 	}
 }
 
 
 func TestQueue(t *testing.T) {
 
-	q := StringQueue{}
+	q := HyperlinkQueue{}
 
 	for i:=0; i < 100; i++ {
-		q.Push(strconv.Itoa(i+1))
+		q.Push(Hyperlink{strconv.Itoa(i+1), 0})
 	}
 
 	if l := q.Len(); l != 100 {
 		t.Errorf("Incorrect length on queue: expected %d, got %d", 100, l)
 	}
 
-	if top, found := q.Pop(); !found || top != "1" {
-		t.Errorf(`Pop returned incorrect result: expected ("1", true), got (%s, %v)`, top, found)
+	if top, found := q.Pop(); !found || top.urlStr != "1" {
+		t.Errorf(`Pop returned incorrect result: expected ("1", true), got (%s, %v)`, top.urlStr, found)
 	}
 	if l := q.Len(); l != 99 {
 		t.Errorf("Incorrect length on queue: expected %d, got %d", 99, l)
 	}
 
-	if top, found := q.Pop(); !found || top != "2" {
-		t.Errorf(`Pop returned incorrect result: expected ("2", true), got (%s, %v)`, top, found)
+	if top, found := q.Pop(); !found || top.urlStr != "2" {
+		t.Errorf(`Pop returned incorrect result: expected ("2", true), got (%s, %v)`, top.urlStr, found)
 	}
 	if l := q.Len(); l != 98 {
 		t.Errorf("Incorrect length on queue: expected %d, got %d", 98, l)
@@ -58,25 +58,25 @@ func TestQueue(t *testing.T) {
 	if l := q.Len(); l != 0 {
 		t.Errorf("Incorrect length: expected %d, got %d", 0, l)
 	}
-	if top, found := q.Pop(); found || len(top) > 0 {
-		t.Errorf("Pop from empty queue returned incorrect result: expected (, false), got (%s, %v)", top, found)
+	if top, found := q.Pop(); found || len(top.urlStr) > 0 {
+		t.Errorf("Pop from empty queue returned incorrect result: expected (, false), got (%s, %v)", top.urlStr, found)
 	}
 
 	// one more push and pop
-	q.Push("TEST")
+	q.Push(Hyperlink{"TEST", 0})
 	if l := q.Len(); l != 1 {
 		t.Errorf("Incorrect length: expected %d, got %d", 1, l)
 	}
-	if top, found := q.Pop(); !found || top != "TEST"{
-		t.Errorf(`Pop returned incorrect result: expected ("TEST", true), got (%s, %v)`, top, found)
+	if top, found := q.Pop(); !found || top.urlStr != "TEST"{
+		t.Errorf(`Pop returned incorrect result: expected ("TEST", true), got (%s, %v)`, top.urlStr, found)
 	}
 
 	// should now be empty again
 	if l := q.Len(); l != 0 {
 		t.Errorf("Incorrect length: expected %d, got %d", 0, l)
 	}
-	if top, found := q.Pop(); found || len(top) > 0 {
-		t.Errorf("Pop from empty queue returned incorrect result: expected (, false), got (%s, %v)", top, found)
+	if top, found := q.Pop(); found || len(top.urlStr) > 0 {
+		t.Errorf("Pop from empty queue returned incorrect result: expected (, false), got (%s, %v)", top.urlStr, found)
 	}
 }
 
@@ -84,7 +84,7 @@ func TestConcurrentQueue(t *testing.T) {
 	// very basic test to throw a lot of concurrent operations at a queue
 
 	var wg sync.WaitGroup
-	q := StringQueue{}
+	q := HyperlinkQueue{}
 
 	t.Log("Starting concurrent queue population")
 	for i := 0 ; i < 100; i++ {
@@ -92,7 +92,7 @@ func TestConcurrentQueue(t *testing.T) {
 		go func (num int) {
 			defer wg.Done()
 			for j := 0; j < 100; j++ {
-				q.Push("TEST" + strconv.Itoa(num*100 + j))
+				q.Push(Hyperlink{"TEST" + strconv.Itoa(num*100 + j), 0})
 			}
 		} (i)
 	}
@@ -120,8 +120,8 @@ func TestConcurrentQueue(t *testing.T) {
 	if l := q.Len(); l != 0 {
 		t.Errorf("Incorrect length: expected %d, got %d", 0, l)
 	}
-	if top, found := q.Pop(); found || len(top) > 0 {
-		t.Errorf("Pop from empty queue returned incorrect result: expected (, false), got (%s, %v)", top, found)
+	if top, found := q.Pop(); found || len(top.urlStr) > 0 {
+		t.Errorf("Pop from empty queue returned incorrect result: expected (, false), got (%s, %v)", top.urlStr, found)
 	}
 }
 
@@ -130,7 +130,7 @@ func TestConcurrentQueueInterleave(t *testing.T) {
 	// very basic test to throw a lot of concurrent operations at a queue
 
 	var wg sync.WaitGroup
-	q := StringQueue{}
+	q := HyperlinkQueue{}
 
 	// random selection of push, pop and len operations
 	for i := 0 ; i < 100; i++ {
@@ -138,7 +138,7 @@ func TestConcurrentQueueInterleave(t *testing.T) {
 		go func (num int) {
 			defer wg.Done()
 			for j := 0; j < 1000; j++ {
-				q.Push("TEST")
+				q.Push(Hyperlink{"TEST", 0})
 			}
 		} (i)
 	}
