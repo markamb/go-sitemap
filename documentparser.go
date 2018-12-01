@@ -24,19 +24,20 @@ type DocumentParser interface {
 	ParseDocument(urlStr string, reader io.Reader) (*WebPage, error)
 }
 
-
+// DocParser type implements the DocumentParser interface
 type DocParser struct {
 }
 
+// CreateDocumentParser creates a new DocParser for parsing HTML and returning a WebPage
 func CreateDocumentParser() *DocParser {
 	return &DocParser{}
 }
 
 // ParseDocument parses an HTML document and extracts a WebPage. See DocumentParser interface for details
-func (*DocParser) ParseDocument(urlStr string, reader io.Reader) (*WebPage, error) {
+func (p *DocParser) ParseDocument(urlStr string, reader io.Reader) (*WebPage, error) {
 
-	// first parse the Url to allow relative href links to be correctly calculated
-	parentUrl, err := url.Parse(urlStr)
+	// first parse the URL to allow relative href links to be correctly calculated
+	parentURL, err := url.Parse(urlStr)
 	if err != nil {
 		return nil, err
 	}
@@ -46,33 +47,31 @@ func (*DocParser) ParseDocument(urlStr string, reader io.Reader) (*WebPage, erro
 		return nil, err
 	}
 
-	page := CreateWebPage(parentUrl.String(), "")
-	err = parseNode(rootNode, parentUrl, page)
+	page := CreateWebPage(parentURL, "")
+	err = p.parseNode(rootNode, parentURL, page)
 	if err != nil {
 		return nil, err
 	}
 	return page, nil
 }
 
-// Recursively parse the details of the node into the page structure
-func parseNode(node *html.Node, parentUrl *url.URL, page *WebPage) error {
+// parseNode recursively parses the details of the node into the page structure
+func (p *DocParser) parseNode(node *html.Node, parentURL *url.URL, page *WebPage) error {
 
 	// is this a link?
 	if node.Type == html.ElementNode && node.Data == "a" {
 		for _, attr := range node.Attr {
-			if strings.EqualFold(attr.Key,"href") {
-				internal, absUrl, err := parseUrl(parentUrl, attr.Val)
+			if strings.EqualFold(attr.Key, "href") {
+				internal, absURL, err := p.parseURL(parentURL, attr.Val)
 				if err != nil {
 					return err
 				} else if internal {
-//					log.Printf("TRACE: Found internal href to %v\n", absUrl)
-					page.InternalLinks[absUrl] = true
-				} else {
-//					log.Printf("TRACE: Skipping external or invalid href to %v\n", attr.Val)
+					page.InternalLinks[absURL] = true
 				}
 				break
 			}
 		}
+		return nil
 	}
 
 	// is it the title
@@ -85,63 +84,81 @@ func parseNode(node *html.Node, parentUrl *url.URL, page *WebPage) error {
 			}
 			page.Title = title
 		}
+		return nil
 	}
 
-	for child := node.FirstChild; child != nil; child= child.NextSibling {
-		err := parseNode(child, parentUrl, page)
+	for child := node.FirstChild; child != nil; child = child.NextSibling {
+		err := p.parseNode(child, parentURL, page)
 		if err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
 //
-// Parse the URL urlStr and test if it is a valid link to a page on the same domain as the parent.
+// parseURL parses the url and tests if it is a valid link to a page on the same domain as the parent.
 // Returns 3 fields:
 //		bool	is this a valid url on the same domain as the parent
-//		string	absolute URL
+//		string	absolute URL in a nomalised form
 //		error	error if invalid inputs supplied (note invalid href string is not considered an error)
 //
-func parseUrl(parent *url.URL, href string) (bool, string, error) {
+func (p *DocParser) parseURL(parent *url.URL, href string) (bool, string, error) {
 
 	// first a sanity check - the parent must be an absolute url
 	if !parent.IsAbs() {
 		return false, "", fmt.Errorf("cannot resolve href as relative URL passed as parent: %v", href)
 	}
 
-	// First make sure its a valid url
-	url, err := url.Parse(href)
+	strURL := href
+	if strings.HasPrefix(href, "/") {
+		// relative url - create one based off the parent
+		tempURL := *parent
+		tempURL.Path = href
+		strURL = tempURL.String()
+	}
+	result, err := url.Parse(strURL)
 	if err != nil {
-		return false, "", nil
+		return false, "", err
+	}
+
+	if len(result.Scheme) == 0 {
+		result.Scheme = parent.Scheme // add a scheme if its not a relative url
 	}
 
 	// is it a supported scheme
-	if len(url.Scheme) != 0 && url.Scheme != "http" && url.Scheme != "https" {
+	if len(result.Scheme) != 0 && result.Scheme != "http" && result.Scheme != "https" {
 		return false, "", nil
 	}
 
+	// we remove any training / to ensure equivilent URLS match
+	// and ignore any fragments
+	result.Path = strings.TrimSuffix(result.Path, "/")
+	result.Fragment = ""
+
+	// normalise it
+	result, err = url.Parse(result.String())
+	if err != nil || len(result.Host) == 0 {
+		return false, "", err
+	}
+
 	// check the domain
-	if url.IsAbs() && !sameHost(url.Host, parent.Host) {
-		return false, "", nil		// different domain
+	if !sameHost(result.Host, parent.Host) {
+		return false, "", nil // different domain
 	}
 
 	// same port?
-	if len(url.Port()) != 0 && url.Port() != parent.Port() {
-		return false, "", nil		// different port
+	if len(result.Port()) != 0 && result.Port() != parent.Port() {
+		return false, "", nil // different port
 	}
-
-	// convert to an absolute URL
-	result := parent.ResolveReference(url)
 
 	// If they resolve to the same URL as the parent we ignore it
 	// Note we only care about the path (not scheme, fragment or query)
 	if result.Path == parent.Path {
-		return false, "", nil		// link back to itself
+		return false, "", nil // link back to itself
 	}
 
-	// clean it up a bit
-	result.Fragment = ""
 	return true, result.String(), nil
 }
 
@@ -150,5 +167,5 @@ func parseUrl(parent *url.URL, href string) (bool, string, error) {
 func sameHost(h1 string, h2 string) bool {
 	h1 = strings.TrimPrefix(h1, "www.")
 	h2 = strings.TrimPrefix(h2, "www.")
-	return h1 == h2
+	return strings.EqualFold(h1, h2)
 }

@@ -14,46 +14,52 @@ import (
 type Crawler struct {
 
 	// Interfaces used to load documents
-	docLoader 		DocumentLoader
+	docLoader DocumentLoader
 
 	// Site Map used to store results
-	siteMap			SiteMapper
+	siteMap SiteMapper
 
 	// url to start crawling from
-	startUrl		*url.URL
+	startURL *url.URL
 
 	// configuration
-	minLoadDelay 	int		// default minimum delay between starting each load
-	numLoaders 		int		// number of goroutines used for loading (= maximum number of concurrent requests)
-	maxPagesToLoad	int		// Limits the number of pages loaded for testing on large sites. 0 to load all available pages.
-	maxCrawlDepth	int		// maximum depth to crawl on large sites (0 to load all available pages)
+	minLoadDelay   int  // default minimum delay between starting each load
+	numLoaders     int  // number of goroutines used for loading (= maximum number of concurrent requests)
+	maxPagesToLoad int  // Limits the number of pages loaded for testing on large sites. 0 to load all available pages.
+	maxCrawlDepth  int  // maximum depth to crawl on large sites (0 to load all available pages)
+	verbose        bool // true for extra logging
 
 	// an in-memory queue for storing our URLs to be crawled
-	urlQueue		HyperlinkQueue
+	urlQueue HyperlinkQueue
 
 	// channels
-	pagesChan 	chan *WebPage	// pages to be ingested into the Site Map
-	urlLoadChan chan Hyperlink 	// URLs to be loaded by our pool of page loading workers
-	linksChan 	chan Hyperlink	// Internal links read off processed pages
-	pendingItemsChan chan int	// Track total number of items queued, or being processed across all channels
-	finishedEventChan chan bool	// used to signal that crawling is complete
+	pagesChan         chan *WebPage  // pages to be ingested into the Site Map
+	urlLoadChan       chan Hyperlink // URLs to be loaded by our pool of page loading workers
+	linksChan         chan Hyperlink // Internal links read off processed pages
+	pendingItemsChan  chan int       // Track total number of items queued, or being processed across all channels
+	finishedEventChan chan bool      // used to signal that crawling is complete
 }
 
-func CreateCrawler(start *url.URL, l DocumentLoader, mapper SiteMapper) *Crawler {
-	return &Crawler {
-		docLoader:		l,
-		startUrl:		start,
-		siteMap:		mapper,
-		minLoadDelay:	1000,
-		numLoaders:		5,
-		maxPagesToLoad:	25,
+//
+// CreateCrawler creates a new Crawler type for the supplied starting URL (start).
+// Documents are loaded and parsed into WebPage instances using the loader interface, and saved
+// into the site map using the mapper interface.
+//
+func CreateCrawler(start *url.URL, loader DocumentLoader, mapper SiteMapper) *Crawler {
+	return &Crawler{
+		docLoader:      loader,
+		startURL:       start,
+		siteMap:        mapper,
+		minLoadDelay:   1000,
+		numLoaders:     5,
+		maxPagesToLoad: 25,
 		maxCrawlDepth:  0,
 
-		pagesChan:			make(chan *WebPage, 20),
-		urlLoadChan:		make(chan Hyperlink, 20),
-		linksChan:			make(chan Hyperlink),
-		pendingItemsChan:	make(chan int),
-		finishedEventChan:	make(chan bool),
+		pagesChan:         make(chan *WebPage, 20),
+		urlLoadChan:       make(chan Hyperlink, 20),
+		linksChan:         make(chan Hyperlink),
+		pendingItemsChan:  make(chan int),
+		finishedEventChan: make(chan bool),
 	}
 }
 
@@ -62,6 +68,22 @@ func CreateCrawler(start *url.URL, l DocumentLoader, mapper SiteMapper) *Crawler
 //
 func (c *Crawler) crawl() error {
 
+	log.Printf("INFO: Starting crawl process...\n")
+	log.Printf("INFO:    start = %v\n", c.startURL)
+	log.Printf("INFO:    throttle (minimum time between request) = %v ms\n", c.minLoadDelay)
+	log.Printf("INFO:    load/parse thread count = %v\n", c.numLoaders)
+	if c.maxPagesToLoad == 0 {
+		log.Print("INFO:    max pages to load = None\n")
+	} else {
+		log.Printf("INFO:    max pages to load = %d\n", c.maxPagesToLoad)
+	}
+	if c.maxCrawlDepth == 0 {
+		log.Print("INFO:    maximum crawl depth = None\n", c.maxCrawlDepth)
+	} else {
+		log.Printf("INFO:    maximum crawl depth = %d\n", c.maxCrawlDepth)
+	}
+	log.Printf("INFO:    extra logging = %v\n", c.verbose)
+
 	var wg sync.WaitGroup
 
 	//
@@ -69,7 +91,7 @@ func (c *Crawler) crawl() error {
 	// Note we optionally throttle how quickly we load pages using a ticker to make sure
 	// we're not blacklisted or unpopular with the site owner
 	//
-	var loadTicker *time.Ticker = nil
+	var loadTicker *time.Ticker
 	if c.minLoadDelay != 0 {
 		loadTicker = time.NewTicker(time.Duration(c.minLoadDelay) * time.Millisecond)
 		defer loadTicker.Stop()
@@ -87,7 +109,7 @@ func (c *Crawler) crawl() error {
 	// We must do this in a single thread as the SiteMap is not thread safe
 	//
 	wg.Add(1)
-	go func () {
+	go func() {
 		defer wg.Done()
 		c.populateSiteMap()
 	}()
@@ -125,9 +147,8 @@ func (c *Crawler) crawl() error {
 	//
 	// Add our start URL to start the crawling process
 	//
-	log.Printf("INFO: Starting crawl process...")
 	c.pendingItemsChan <- 1
-	c.linksChan <- Hyperlink{ c.startUrl.String(), 1 }
+	c.linksChan <- Hyperlink{c.startURL.String(), 1}
 
 	// Wait for the crawling to complete
 	wg.Wait()
@@ -141,7 +162,7 @@ func (c *Crawler) crawl() error {
 // close the channels so the crawling goroutines will complete. This is needed because our channels
 // form a loop so none can detect running out of work in isolation
 //
-func (c *Crawler) monitorProgress()  {
+func (c *Crawler) monitorProgress() {
 	itemCount := 0
 	for delta := range c.pendingItemsChan {
 		itemCount += delta
@@ -164,21 +185,23 @@ func (c *Crawler) monitorProgress()  {
 // If loadTicker is supplied (not nil) we only load a new page after reading a tick (used
 // to throttle our rate of loading)
 //
-func (c *Crawler) loadPages(loadTicker *time.Ticker)  {
+func (c *Crawler) loadPages(loadTicker *time.Ticker) {
 	for load := range c.urlLoadChan {
-		page, err := c.docLoader.LoadUrl(load.urlStr)
+		page, err := c.docLoader.LoadURL(load.urlStr)
 		if page != nil {
 			for link := range page.InternalLinks {
 				c.pendingItemsChan <- 1
-				c.linksChan <- Hyperlink{link, load.depth+1 } // send the links back to the crawler to keep going
+				c.linksChan <- Hyperlink{link, load.depth + 1} // send the links back to the crawler to keep going
 			}
 			c.pagesChan <- page // send page details to be ingested into site map
 		} else {
-			log.Printf("TRACE : Ignoring Url : %v", err)
+			if c.verbose {
+				log.Printf("TRACE : Ignoring URL : %v", err)
+			}
 			c.pendingItemsChan <- -1
 		}
 		if loadTicker != nil {
-			<-loadTicker.C 		// make sure we have required delay between last load starting
+			<-loadTicker.C // make sure we have required delay between last load starting
 		}
 	}
 }
@@ -205,7 +228,9 @@ func (c *Crawler) enqueueNewUrls() {
 			c.pendingItemsChan <- -1
 		} else {
 			// add url it to our in-memory queue to be crawled
-			log.Printf("TRACE: Queuing up URL %v\n", link)
+			if c.verbose {
+				log.Printf("TRACE: Queuing up URL %v\n", link)
+			}
 			seen[link.urlStr] = true
 			count++
 			c.urlQueue.Push(link)
@@ -218,7 +243,7 @@ func (c *Crawler) enqueueNewUrls() {
 //
 func (c *Crawler) populateSiteMap() {
 	for page := range c.pagesChan {
-		if err := c.siteMap.AddPage(page); err != nil {
+		if _, err := c.siteMap.AddPage(page); err != nil {
 			log.Printf("WARN: %v\n", err)
 		}
 		c.pendingItemsChan <- -1
@@ -245,7 +270,3 @@ func (c *Crawler) dequeueUrls() {
 		}
 	}
 }
-
-
-
-

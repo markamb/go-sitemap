@@ -12,16 +12,16 @@ import (
 // Create mock document parer
 //
 type MockParser struct {
-	calls 			int			// number of calls made
-	recievedUrl		string		// URL of first call
-	recievedDoc		string		// document supplied in 1st call
-	result 			*WebPage	// result to return
-	err 			error 		// result to return
+	calls       int      // number of calls made
+	recievedURL string   // URL of first call
+	recievedDoc string   // document supplied in 1st call
+	result      *WebPage // result to return
+	err         error    // result to return
 }
 
 // Mock Document Parser - Just store the doc being parsed
 func (m *MockParser) ParseDocument(urlStr string, reader io.Reader) (*WebPage, error) {
-	m.recievedUrl = urlStr
+	m.recievedURL = urlStr
 	if b, err := ioutil.ReadAll(reader); err == nil {
 		m.recievedDoc = string(b)
 	}
@@ -38,19 +38,19 @@ func TestDocumentLoader(t *testing.T) {
 	mockHandler := func(rw http.ResponseWriter, req *http.Request) {
 		rw.Header().Add("Content-Type", "text/html more stuff")
 		rw.WriteHeader(http.StatusOK)
-		rw.Write([]byte(doc))		// return our document
+		rw.Write([]byte(doc)) // return our document
 	}
 
 	mockServer := httptest.NewServer(http.HandlerFunc(mockHandler))
 	defer mockServer.Close()
 
 	mockParser := &MockParser{
-		result: 	&WebPage {Title: "My Web Page Title" },
-		err:		nil,
+		result: &WebPage{Title: "My Web Page Title"},
+		err:    nil,
 	}
 	docLoader := CreateDocumentLoader(mockParser)
-	Url := mockServer.URL + path
-	page, err := docLoader.LoadUrl(Url)
+	URL := mockServer.URL + path
+	page, err := docLoader.LoadURL(URL)
 
 	// validate
 	if err != nil {
@@ -59,14 +59,14 @@ func TestDocumentLoader(t *testing.T) {
 	if mockParser.calls != 1 {
 		t.Errorf("Incorrect number of calls to mock server: expected %d, got %d", 1, mockParser.calls)
 	}
-	if mockParser.recievedUrl !=  Url {
-		t.Errorf("Incorrect Url sent to mock parser: expected %s, got %s", Url, mockParser.recievedUrl)
+	if mockParser.recievedURL != URL {
+		t.Errorf("Incorrect URL sent to mock parser: expected %s, got %s", URL, mockParser.recievedURL)
 	}
 	if mockParser.recievedDoc != doc {
 		t.Errorf("Incorrect contents sent to mock parser: expected %s, got %s", doc, mockParser.recievedDoc)
 	}
 	if page != mockParser.result {
-		t.Errorf("Incorrect result from LoadUrl: expected %v, got %v", mockParser.result, page)
+		t.Errorf("Incorrect result from LoadURL: expected %v, got %v", mockParser.result, page)
 	}
 }
 
@@ -77,15 +77,15 @@ func TestDocumentLoaderBadContentType(t *testing.T) {
 	mockHandler := func(rw http.ResponseWriter, req *http.Request) {
 		rw.Header().Add("Content-Type", "text/json more stuff")
 		rw.WriteHeader(http.StatusOK)
-		rw.Write([]byte(doc))		// return our document
+		rw.Write([]byte(doc)) // return our document
 	}
 
 	mockServer := httptest.NewServer(http.HandlerFunc(mockHandler))
 	defer mockServer.Close()
 
-	mockParser := &MockParser{ }
+	mockParser := &MockParser{}
 	docLoader := CreateDocumentLoader(mockParser)
-	page, err := docLoader.LoadUrl(mockServer.URL + "/path")
+	page, err := docLoader.LoadURL(mockServer.URL + "/path")
 
 	// validate
 	// Unsupported content type - mock should not have been called
@@ -93,10 +93,10 @@ func TestDocumentLoaderBadContentType(t *testing.T) {
 		t.Errorf("Incorrect number of calls to mock server: expected %d, got %d", 1, mockParser.calls)
 	}
 	if page != nil {
-		t.Errorf("Incorrect result from LoadUrl: expected %v, got %v", nil, page)
+		t.Errorf("Incorrect result from LoadURL: expected %v, got %v", nil, page)
 	}
 	if err == nil {
-		t.Error("Missing expected error from LoadUrl")
+		t.Error("Missing expected error from LoadURL")
 	}
 }
 
@@ -107,15 +107,15 @@ func TestDocumentLoaderBadResponseCode(t *testing.T) {
 	mockHandler := func(rw http.ResponseWriter, req *http.Request) {
 		rw.WriteHeader(http.StatusNotFound)
 		rw.Header().Add("Content-Type", "text/html more stuff")
-		rw.Write([]byte(doc))		// return our document
+		rw.Write([]byte(doc)) // return our document
 	}
 
 	mockServer := httptest.NewServer(http.HandlerFunc(mockHandler))
 	defer mockServer.Close()
 
-	mockParser := &MockParser{ }
+	mockParser := &MockParser{}
 	docLoader := CreateDocumentLoader(mockParser)
-	page, err := docLoader.LoadUrl(mockServer.URL + "/path")
+	page, err := docLoader.LoadURL(mockServer.URL + "/path")
 
 	// validate
 	// Error status code returned
@@ -123,10 +123,9 @@ func TestDocumentLoaderBadResponseCode(t *testing.T) {
 		t.Errorf("Incorrect number of calls to mock server: expected %d, got %d", 1, mockParser.calls)
 	}
 	if page != nil {
-		t.Errorf("Incorrect result from LoadUrl: expected %v, got %v", nil, page)
+		t.Errorf("Incorrect result from LoadURL: expected %v, got %v", nil, page)
 	}
 	if err == nil {
-		t.Error("Missing expected error from LoadUrl")
+		t.Error("Missing expected error from LoadURL")
 	}
 }
-

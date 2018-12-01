@@ -1,21 +1,22 @@
 package main
 
 import (
-	"testing"
 	"net/url"
+	"testing"
 )
+
 func TestEmptySiteMap(t *testing.T) {
 
-	Url, err := url.Parse("https://bbc.co.uk")
-	if  err != nil {
+	URL, err := url.Parse("https://bbc.co.uk")
+	if err != nil {
 		t.Fatal(err)
 	}
-	site := CreateSiteMap(Url)
+	site := CreateSiteMap(URL)
 
 	if site.Domain != "bbc.co.uk" {
 		t.Fail()
 	}
-	if site.RootPage != Url.String() {
+	if site.RootPage != URL.String() {
 		t.Fail()
 	}
 	if len(site.Pages) != 0 {
@@ -23,72 +24,118 @@ func TestEmptySiteMap(t *testing.T) {
 	}
 }
 
+// Test that pages are only displayed at the top level at which they appear
+func TestSiteMap(t *testing.T) {
 
-func TestSmallSiteMap(t *testing.T) {
-
-	Url, err := url.Parse("https://test.com")
-	if  err != nil {
+	URL, err := url.Parse("https://test.com")
+	if err != nil {
 		t.Fatal(err)
 	}
-	site := CreateSiteMap(Url)
+	site := CreateSiteMap(URL)
 
-	urlBase := Url.String()
-	titleBase := urlBase + ":TITLE"
-	p1 := CreateWebPage(urlBase, titleBase)
-	for i:=0; i < 10; i++ {
-		next := urlBase + "/" + string(i)
-		p1.InternalLinks[next] = true
-		nextPage := CreateWebPage(next, string(i))
-		if i == 1 {
-			// add a sub-child off the 2nd item
-			nextPage.InternalLinks[next + "/leaf"] = true
-			if err := site.AddPage(CreateWebPage(next + "/leaf", "Leaf Page")); err != nil {
-				t.Fatalf("Failed to add child of child page: %v", err )
-			}
-		}
-		if err := site.AddPage(nextPage); err != nil {
-			t.Fatalf("Failed to add child page: %d: %v", i, err )
-		}
-	}
+	urlBase := URL.String()
 
-	if err := site.AddPage(p1); err != nil {
-		t.Fatalf("Failed to add page: %v", err)
-	}
+	//
+	// level 1 (root page)
+	//
+	level1 := addPage(t, site, true, urlBase, "1")
 
-	// fill the channel with nodes in (hopefully) correct order
+	//
+	// level 2
+	// 3 child pages, plus a link back to itself which should be ignored)
+	//
+	level2_1_1 := addPage(t, site, true, urlBase+"/1/1", "1_1")
+	level2_1_2 := addPage(t, site, true, urlBase+"/1/2", "1_2")
+	level2_1_3 := addPage(t, site, true, urlBase+"/1/3", "1_3")
+	level1.InternalLinks[level2_1_1.URL.String()] = true
+	level1.InternalLinks[level2_1_2.URL.String()] = true
+	level1.InternalLinks[level2_1_3.URL.String()] = true
+	level1.InternalLinks[level1.URL.String()] = true
+
+	// add some duplicate pages - these should fail to add
+	addPage(t, site, false, urlBase+"/1/2", "Duplicate")
+	addPage(t, site, false, urlBase+"/1/2/", "Duplicate")
+
+	// level 3
+	//
+	level3_1_1_1 := addPage(t, site, true, urlBase+"/1/1/1", "1_1_1")
+	level3_1_1_2 := addPage(t, site, true, urlBase+"/1/1/2", "1_1_2")
+	level3_1_3_1 := addPage(t, site, true, urlBase+"/1/3/1", "1_3_2")
+	level2_1_1.InternalLinks[level3_1_1_1.URL.String()] = true
+	level2_1_1.InternalLinks[level3_1_1_2.URL.String()] = true
+	level2_1_3.InternalLinks[level3_1_3_1.URL.String()] = true
+	level2_1_3.InternalLinks[level3_1_1_1.URL.String()] = true // duplicate at same level
+	level2_1_3.InternalLinks[level1.URL.String()] = true       // link back to higher level (should be skipped)
+	level2_1_3.InternalLinks[level3_1_1_1.URL.String()] = true // link to same level (should be displayed)
+
+	// level 4
+	// Add a child under 1_1_1 which should only appear once (as 1_1_1 should only be expanded once)
+	level4_1_1_1_1 := addPage(t, site, true, urlBase+"/1/1/1/1", "1_1_1_1")
+	level3_1_1_1.InternalLinks[level4_1_1_1_1.URL.String()] = true
+
+	// last level 5 which should be ignored (links back to parent level)
+	level4_1_1_1_1.InternalLinks[level3_1_3_1.URL.String()] = true
+
+	// write structure if test fails for debugging
+	//	PrintSite("", urlBase, site)
+
+	// traverse the site map, fill the channel with nodes in (hopefully) correct order
 	ch := make(chan MapTraversalNode, 100)
 	site.TraverseSiteMap(ch)
 
-	next := <-ch
-	if next.Depth != 0 {
-		t.Fatalf("First page not correct height: %d\n", next.Depth)
-	}
-	if next.Page == nil || next.Page.Title != titleBase {
-		t.Fatalf("First page not correct: %v\n", next.Page)
-	}
-	// ensure children returned in correct order
-	for i:=0; i < 10; i++ {
-		next = <-ch
-		if next.Depth != 1 {
-			t.Fatalf("Child page %d not correct height: %d\n", i, next.Depth)
-		}
-		if next.Page == nil || next.Page.Title != string(i) || next.Page.Url != (urlBase + "/" + string(i)) {
-			t.Fatalf("Child page %d not correct contents: %v\n", i, next)
-		}
-		if i == 1 {
-			// this child has a child of its own which should be iterated over first
-			leaf := <-ch
-			if leaf.Depth != 2 {
-				t.Fatalf("Leaf page not correct height: %d\n", leaf.Depth)
-			}
-			if leaf.Page == nil || leaf.Page.Title != "Leaf Page" || leaf.Page.Url != (urlBase + "/" + string(1) + "/leaf") {
-				t.Fatalf("Leaf page not correct contents: %v\n", leaf.Page)
-			}
-		}
-	}
+	// assert pages coming pack in correct order
+	assertPage(t, level1, 0, <-ch)
+	assertPage(t, level2_1_1, 1, <-ch)
+	assertPage(t, level3_1_1_1, 2, <-ch)
+	assertPage(t, level4_1_1_1_1, 3, <-ch)
+	assertPage(t, level3_1_1_2, 2, <-ch)
+	assertPage(t, level2_1_2, 1, <-ch)
+	assertPage(t, level2_1_3, 1, <-ch)
+	assertPage(t, level3_1_1_1, 2, <-ch)
+	assertPage(t, level3_1_3_1, 2, <-ch)
 
+	// check no more pages coming back and channel is closed
 	if _, ok := <-ch; ok {
 		t.Fatal("Channel not closed")
 	}
 }
 
+func createWebPage(t *testing.T, rawurl string, title string) *WebPage {
+	URL, err := url.Parse(rawurl)
+	if err != nil {
+		t.Fatalf("Invalid URL supplied in test case: %v", err)
+	}
+	return CreateWebPage(URL, title)
+}
+
+func addPage(t *testing.T, site *SiteMap, expectSuccess bool, urlStr string, title string) *WebPage {
+	URL, err := url.Parse(urlStr)
+	if err != nil {
+		t.Fatalf("Invalid URL string in test case %v. Duplicate URL?", err)
+	}
+	page := CreateWebPage(URL, title)
+	if page == nil {
+		t.Fatalf("Failed to create page %s. Duplicate URL?", page.URL)
+	}
+	added, err := site.AddPage(page)
+	if err != nil {
+		t.Fatalf("Exception adding page %s: %v", page.URL, err)
+	}
+	if expectSuccess != added {
+		t.Fatalf("Failed adding page to site: expected %v, got %v for page %s", expectSuccess, added, title)
+	}
+	return page
+}
+
+// validate the 2 pages are the same
+func assertPage(t *testing.T, expectedPage *WebPage, expectedDepth int, got MapTraversalNode) {
+	if got.Depth != expectedDepth {
+		t.Fatalf("Next page not correct height (%s): expected %d, got %d\n", expectedPage.URL, expectedDepth, got.Depth)
+	}
+	if expectedPage == nil && got.Page == nil {
+		return
+	}
+	if got.Page != expectedPage {
+		t.Fatalf("Next page not correct (%s): expected %v, got %v\n", expectedPage.URL, expectedPage, got.Page)
+	}
+}

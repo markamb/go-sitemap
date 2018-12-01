@@ -18,13 +18,12 @@ func TestEmptyQueue(t *testing.T) {
 	}
 }
 
-
 func TestQueue(t *testing.T) {
 
 	q := HyperlinkQueue{}
 
-	for i:=0; i < 100; i++ {
-		q.Push(Hyperlink{strconv.Itoa(i+1), 0})
+	for i := 0; i < 100; i++ {
+		q.Push(Hyperlink{strconv.Itoa(i + 1), 0})
 	}
 
 	if l := q.Len(); l != 100 {
@@ -45,7 +44,7 @@ func TestQueue(t *testing.T) {
 		t.Errorf("Incorrect length on queue: expected %d, got %d", 98, l)
 	}
 
-	for i:=97; i >= 0; i-- {
+	for i := 97; i >= 0; i-- {
 		if _, found := q.Pop(); !found {
 			t.Errorf(`Pop failed for iteration %d`, i)
 		}
@@ -67,7 +66,7 @@ func TestQueue(t *testing.T) {
 	if l := q.Len(); l != 1 {
 		t.Errorf("Incorrect length: expected %d, got %d", 1, l)
 	}
-	if top, found := q.Pop(); !found || top.urlStr != "TEST"{
+	if top, found := q.Pop(); !found || top.urlStr != "TEST" {
 		t.Errorf(`Pop returned incorrect result: expected ("TEST", true), got (%s, %v)`, top.urlStr, found)
 	}
 
@@ -87,14 +86,14 @@ func TestConcurrentQueue(t *testing.T) {
 	q := HyperlinkQueue{}
 
 	t.Log("Starting concurrent queue population")
-	for i := 0 ; i < 100; i++ {
+	for i := 0; i < 100; i++ {
 		wg.Add(1)
-		go func (num int) {
+		go func(num int) {
 			defer wg.Done()
 			for j := 0; j < 100; j++ {
-				q.Push(Hyperlink{"TEST" + strconv.Itoa(num*100 + j), 0})
+				q.Push(Hyperlink{"TEST" + strconv.Itoa(num*100+j), 0})
 			}
-		} (i)
+		}(i)
 	}
 	wg.Wait()
 
@@ -103,16 +102,16 @@ func TestConcurrentQueue(t *testing.T) {
 		t.Errorf("Incorrect length: expected %d, got %d", 10000, l)
 	}
 
-	for i := 0 ; i < 100; i++ {
+	for i := 0; i < 100; i++ {
 		wg.Add(1)
-		go func () {
+		go func() {
 			defer wg.Done()
 			for j := 0; j < 100; j++ {
 				if _, found := q.Pop(); !found {
 					t.Errorf(`Pop returned incorrect result: expected true, got %v`, found)
 				}
 			}
-		} ()
+		}()
 	}
 	wg.Wait()
 
@@ -125,7 +124,6 @@ func TestConcurrentQueue(t *testing.T) {
 	}
 }
 
-
 func TestConcurrentQueueInterleave(t *testing.T) {
 	// very basic test to throw a lot of concurrent operations at a queue
 
@@ -133,39 +131,35 @@ func TestConcurrentQueueInterleave(t *testing.T) {
 	q := HyperlinkQueue{}
 
 	// random selection of push, pop and len operations
-	for i := 0 ; i < 100; i++ {
+	for i := 0; i < 100; i++ {
 		wg.Add(1)
-		go func (num int) {
+		go func(num int) {
 			defer wg.Done()
 			for j := 0; j < 1000; j++ {
 				q.Push(Hyperlink{"TEST", 0})
 			}
-		} (i)
+		}(i)
 	}
 
-	for i := 0 ; i < 100; i++ {
+	for i := 0; i < 100; i++ {
 		wg.Add(1)
-		go func (num int) {
+		go func(num int) {
 			defer wg.Done()
 			for j := 0; j < 1000; j++ {
 				q.Pop()
 			}
-		} (i)
+		}(i)
 	}
 
-	for i := 0 ; i < 100; i++ {
+	for i := 0; i < 100; i++ {
 		wg.Add(1)
-		go func (num int) {
+		go func(num int) {
 			defer wg.Done()
 			for j := 0; j < 1000; j++ {
 				q.Len()
 			}
-		} (i)
+		}(i)
 	}
 
 	wg.Wait()
 }
-
-
-
-

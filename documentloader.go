@@ -9,16 +9,15 @@ import (
 )
 
 //
-// Interface and implementation for loading documents from URLs.
+// DocumentLoader interface for loading and parsing documents from URLs and returning the WebPage
 //
 type DocumentLoader interface {
 
 	//
-	// LoadUrl method loads a URL supplied as a string and returns a WebPage representing its contents
+	// LoadURL method loads a URL supplied as a string and returns a WebPage representing its contents
 	// Only HTML documents are processed, with all other types being ignored.
 	//
-	LoadUrl(urlStr string) (*WebPage, error)
-
+	LoadURL(urlStr string) (*WebPage, error)
 }
 
 //
@@ -26,20 +25,19 @@ type DocumentLoader interface {
 // it using the supplied DocumentParser interface.
 //
 type DocLoader struct {
-	parser DocumentParser	// store the interface used to parse pages as they are loaded
+	parser DocumentParser // store the interface used to parse pages as they are loaded
 }
 
 //
-// Create a document loader which uses the supplied DocumentParser interface
-// for parsing HTML documents as they are loaded
+// CreateDocumentLoader creates a document loader using the supplied DocumentParser interface
+// for parsing HTML documents loaded.
 //
 func CreateDocumentLoader(p DocumentParser) *DocLoader {
-	return &DocLoader { parser: p}
+	return &DocLoader{parser: p}
 }
 
-
-// loadUrl loads then parses a we document. See DocumentLoader interface for details.
-func (loader *DocLoader) LoadUrl(urlStr string) (*WebPage, error) {
+// LoadURL loads then parses a we document. See DocumentLoader interface for details.
+func (loader *DocLoader) LoadURL(urlStr string) (*WebPage, error) {
 	start := time.Now()
 	resp, err := http.Get(urlStr)
 	if err != nil {
@@ -47,17 +45,17 @@ func (loader *DocLoader) LoadUrl(urlStr string) (*WebPage, error) {
 	}
 	defer resp.Body.Close()
 	if contentType := resp.Header.Get("Content-Type"); !strings.HasPrefix(contentType, "text/html") {
-		return nil, fmt.Errorf("Unsupported content type %v for Url (%v)\n", contentType, urlStr)
+		return nil, fmt.Errorf("unsupported content type %v for URL (%v)", contentType, urlStr)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Bad status code, status code %d (%s) for Url (%v)\n", resp.StatusCode, resp.Status, urlStr)
+		return nil, fmt.Errorf("bad status code, status code %d (%s) for URL (%v)", resp.StatusCode, resp.Status, urlStr)
 	}
 	page, err := loader.parser.ParseDocument(urlStr, resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to parse contents for Url %s :%v \n", urlStr, err)
+		return nil, fmt.Errorf("failed to parse contents for URL %s :%v", urlStr, err)
 	}
 
 	loadSecs := time.Since(start).Seconds()
-	log.Printf("INFO: Loaded and parsed %s in %f secs\n", urlStr, loadSecs)
+	log.Printf("INFO: Loaded and parsed %s in %f secs", urlStr, loadSecs)
 	return page, nil
 }
