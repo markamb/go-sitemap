@@ -8,19 +8,12 @@ import (
 	"strings"
 )
 
-//
 // DocumentParser interface is used to parse the contents of a document loaded from
 // a URL and create a WebPage from the contents
-//
-// Known issues / unsupported features:
-//		<BASE> tag on a page is not supported
-//
-//
 type DocumentParser interface {
-	//
+
 	// ParseDocument takes a URL and the contents of page stored there and parses it into a WebPage structure.
 	// The document is assumed to contain HTML
-	//
 	ParseDocument(urlStr string, reader io.Reader) (*WebPage, error)
 }
 
@@ -74,7 +67,7 @@ func (p *DocParser) parseNode(node *html.Node, parentURL *url.URL, page *WebPage
 		return nil
 	}
 
-	// is it the title
+	// is it the title?
 	if node.Type == html.ElementNode && strings.EqualFold(node.Data, "title") {
 		if node.FirstChild != nil && node.FirstChild.Type == html.TextNode {
 			// trim whitespace then take the first line as the title
@@ -87,6 +80,7 @@ func (p *DocParser) parseNode(node *html.Node, parentURL *url.URL, page *WebPage
 		return nil
 	}
 
+	// no, recursively process its children
 	for child := node.FirstChild; child != nil; child = child.NextSibling {
 		err := p.parseNode(child, parentURL, page)
 		if err != nil {
@@ -97,7 +91,6 @@ func (p *DocParser) parseNode(node *html.Node, parentURL *url.URL, page *WebPage
 	return nil
 }
 
-//
 // parseURL parses the url and tests if it is a valid link to a page on the same domain as the parent.
 // Returns 3 fields:
 //		bool	is this a valid url on the same domain as the parent
@@ -123,8 +116,9 @@ func (p *DocParser) parseURL(parent *url.URL, href string) (bool, string, error)
 		return false, "", err
 	}
 
+	// use same scheme as parent on a relative URL
 	if len(result.Scheme) == 0 {
-		result.Scheme = parent.Scheme // add a scheme if its not a relative url
+		result.Scheme = parent.Scheme
 	}
 
 	// is it a supported scheme
@@ -132,8 +126,7 @@ func (p *DocParser) parseURL(parent *url.URL, href string) (bool, string, error)
 		return false, "", nil
 	}
 
-	// we remove any training / to ensure equivilent URLS match
-	// and ignore any fragments
+	// we remove any training / to ensure equivilent URLS match and ignore fragments
 	result.Path = strings.TrimSuffix(result.Path, "/")
 	result.Fragment = ""
 
@@ -148,7 +141,6 @@ func (p *DocParser) parseURL(parent *url.URL, href string) (bool, string, error)
 		return false, "", nil // different domain
 	}
 
-	// same port?
 	if len(result.Port()) != 0 && result.Port() != parent.Port() {
 		return false, "", nil // different port
 	}
@@ -156,7 +148,7 @@ func (p *DocParser) parseURL(parent *url.URL, href string) (bool, string, error)
 	// If they resolve to the same URL as the parent we ignore it
 	// Note we only care about the path (not scheme, fragment or query)
 	if result.Path == parent.Path {
-		return false, "", nil // link back to itself
+		return false, "", nil
 	}
 
 	return true, result.String(), nil

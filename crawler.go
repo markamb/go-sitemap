@@ -7,10 +7,8 @@ import (
 	"time"
 )
 
-//
 // Crawler Type stores a domain to be crawled and the results of doing so.
 // Initialised with a DocumentLoader interface for retrieving and parsing URLs
-//
 type Crawler struct {
 
 	// Interfaces used to load documents
@@ -40,11 +38,9 @@ type Crawler struct {
 	finishedEventChan chan bool      // used to signal that crawling is complete
 }
 
-//
 // CreateCrawler creates a new Crawler type for the supplied starting URL (start).
 // Documents are loaded and parsed into WebPage instances using the loader interface, and saved
 // into the site map using the mapper interface.
-//
 func CreateCrawler(start *url.URL, loader DocumentLoader, mapper SiteMapper) *Crawler {
 	return &Crawler{
 		docLoader:      loader,
@@ -63,9 +59,7 @@ func CreateCrawler(start *url.URL, loader DocumentLoader, mapper SiteMapper) *Cr
 	}
 }
 
-//
 // Starts concurrent crawling process. This method will block until crawling is complete
-//
 func (c *Crawler) crawl() error {
 
 	log.Printf("INFO: Starting crawl process...\n")
@@ -156,12 +150,10 @@ func (c *Crawler) crawl() error {
 	return nil
 }
 
-//
 // monitorProgress: keep track of the number of items being processed or queued across all
 // the channels. When this count reaches zero we have completed the crawling process and should
 // close the channels so the crawling goroutines will complete. This is needed because our channels
 // form a loop so none can detect running out of work in isolation
-//
 func (c *Crawler) monitorProgress() {
 	itemCount := 0
 	for delta := range c.pendingItemsChan {
@@ -179,12 +171,10 @@ func (c *Crawler) monitorProgress() {
 	}
 }
 
-//
 // Read urls to be loaded from urlLoadChan, load and parse them, then send results to
 // output channels.
 // If loadTicker is supplied (not nil) we only load a new page after reading a tick (used
 // to throttle our rate of loading)
-//
 func (c *Crawler) loadPages(loadTicker *time.Ticker) {
 	for load := range c.urlLoadChan {
 		page, err := c.docLoader.LoadURL(load.urlStr)
@@ -206,10 +196,8 @@ func (c *Crawler) loadPages(loadTicker *time.Ticker) {
 	}
 }
 
-//
 // enqueueNewUrls: reads URLS extracted from web pages (from linksChan) and add them into the
 // queue after checking for duplicates
-//
 func (c *Crawler) enqueueNewUrls() {
 	count := 0
 	seen := make(map[string]bool)
@@ -238,9 +226,7 @@ func (c *Crawler) enqueueNewUrls() {
 	}
 }
 
-//
 // populateSiteMap: reads pages off the pagesChan and add them to the site map
-//
 func (c *Crawler) populateSiteMap() {
 	for page := range c.pagesChan {
 		if _, err := c.siteMap.AddPage(page); err != nil {
@@ -250,9 +236,7 @@ func (c *Crawler) populateSiteMap() {
 	}
 }
 
-//
 // dequeuUrls: removes urls to be crawled from the internal queue and sends them to the urlLoadChan
-//
 func (c *Crawler) dequeueUrls() {
 	for {
 		next, ok := c.urlQueue.Pop()

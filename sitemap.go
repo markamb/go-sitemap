@@ -21,11 +21,9 @@ import (
 // No locking is done on this structure and it is assumed no concurrent access will be be used.
 //
 
-//
 // WebPage represents a single page in the website
 // We only store internal links and the page title however this could easily be extended to add any
 // other useful information we want to crawl (list of all external links, page size etc)
-//
 type WebPage struct {
 	URL           *url.URL        // absolute URL for this page
 	Title         string          // HTML title of this page
@@ -44,36 +42,28 @@ func CreateWebPage(newURL *url.URL, title string) *WebPage {
 	return page
 }
 
-//
 // MapTraversalNode is a structure returned for each node when traversing the site map
-//
 type MapTraversalNode struct {
 	Page  *WebPage // the page details
 	Depth int      // the depth of the page at this point
 }
 
-//
 // SiteMapper is an interface used to capture the structure of a website and traverse its
 // pages in a logic order.
-//
 type SiteMapper interface {
 
-	//
 	// AddPage adds a page to the site map. If the page is already present it is ignored and we return false.
 	// If the page is invalid returns an error.
-	// Note that 2 pages are considered equivilent if they refer to the same resource, evn though the actual URL string
-	// may differ
+	// Note that 2 pages are considered equivilent if they refer to the same resource, even though the actual
+	// URL string may differ
 	AddPage(page *WebPage) (bool, error)
 
-	//
 	// TraverseSiteMap adds the pages in the site map to the supplied channel in depth first order suitable
 	// for rendering a site map.
 	//
 	// Note that all links are returned (so a page will be returned multiple times), however the children
-	// for any page are only traversed once (at the highest level at which the page appears)
-	//
-	// The channel will be closed on completion
-	//
+	// for any page are only traversed once (at the highest level at which the page appears). See main.go comments
+	// for more details.
 	TraverseSiteMap(ch chan<- MapTraversalNode)
 }
 
@@ -84,9 +74,7 @@ type SiteMap struct {
 	Pages    map[string]*WebPage // URL for all web pages on the site
 }
 
-//
 // CreateSiteMap creates a new, empty SiteMap for the given domain
-//
 func CreateSiteMap(start *url.URL) *SiteMap {
 	return &SiteMap{Domain: start.Host,
 		RootPage: start.String(),
@@ -106,34 +94,24 @@ func (site *SiteMap) AddPage(page *WebPage) (bool, error) {
 	return true, nil
 }
 
-//
-// TraverseSiteMap adds the pages in the site map to the supplied channel in depth first order suitable
-// for rendering a site map.
-//
-// Note that all links are returned (so a page will be returned multiple times), however the children
-// for any page are only traversed once (at the highest level the page appears)
-//
-// The channel will be closed on completion
-//
 // TraverseSiteMap adds all pages to the supplied channel in depth first order suitable for rendering
 // See SiteMapper interface for details
 func (site *SiteMap) TraverseSiteMap(ch chan<- MapTraversalNode) {
-	//
 	// First we need to determine lowest height for each page (i.e the minimum number of steps from the sites
 	// root to a page along any path). This is used to determine at which point we traverse the pages children
-	//
 	defer close(ch)
 	expanded := make(map[*WebPage]bool)
 	minPageHeights := site.getMinimumHeights()
+	// now do the depth first traversal
 	site.doDepthFirstTraversal(ch, minPageHeights, expanded, 0, site.RootPage)
 }
 
 func (site *SiteMap) doDepthFirstTraversal(
-	ch chan<- MapTraversalNode, // channel to send pages in order
-	minPageHeights map[string]int, // shortest number of links to this page by any path
-	expanded map[*WebPage]bool, // pages already expanded
-	height int, // current traversal depth
-	url string) { // current page
+	ch chan<- MapTraversalNode, 		// channel to send pages in order
+	minPageHeights map[string]int, 		// shortest number of links to this page by any path
+	expanded map[*WebPage]bool, 		// pages already expanded
+	height int, 						// current traversal depth
+	url string) { 						// current page
 	if len(url) == 0 {
 		return
 	}
@@ -178,10 +156,8 @@ type heightQueueEntry struct {
 }
 type heightQueue []heightQueueEntry
 
-//
 // Return a map of URL to the minimum height at which that page appears. Height is defined as the
 // number of links from the root page to this one along the shortest path.
-//
 func (site *SiteMap) getMinimumHeights() map[string]int {
 
 	//
@@ -195,8 +171,8 @@ func (site *SiteMap) getMinimumHeights() map[string]int {
 	//
 	// Note we are using a very simple queue structure here with memory usage equal to number of items pushed
 	// onto the queue (in this case, the number of pages) rather than the maximum number of elements on the
-	// queue at any point in time.
-	// This could be improved using a ring buffer queue implementation
+	// queue at any point in time. This could be improved using a ring buffer queue implementation however its
+	// lifetime is very short.
 	//
 	queue := make(heightQueue, 0)
 	queue = append(queue, heightQueueEntry{site.RootPage, 0})

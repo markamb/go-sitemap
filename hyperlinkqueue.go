@@ -11,12 +11,10 @@ type Hyperlink struct {
 	depth  int
 }
 
-//
 // HyperlinkQueue is an an in-memory, thread-safe queue of Hyperlink entries.
 //
 // Note: We're using a linked list as a queue. This could be made more efficient using a more complex data structure
 // such as a list of arrays or a single array working as a ring buffer (with re-allocations as required)
-//
 type HyperlinkQueue struct {
 	queue list.List
 	mutex sync.Mutex

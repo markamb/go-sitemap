@@ -8,35 +8,26 @@ import (
 	"time"
 )
 
-//
 // DocumentLoader interface for loading and parsing documents from URLs and returning the WebPage
-//
 type DocumentLoader interface {
 
-	//
 	// LoadURL method loads a URL supplied as a string and returns a WebPage representing its contents
 	// Only HTML documents are processed, with all other types being ignored.
-	//
 	LoadURL(urlStr string) (*WebPage, error)
 }
 
-//
-// DocLoader implements the DocumentLoader interface using HTTP to fetch the document and then parsing
+// DocLoader implements the DocumentLoader interface using HTTP to fetch the document and parses
 // it using the supplied DocumentParser interface.
-//
 type DocLoader struct {
 	parser DocumentParser // store the interface used to parse pages as they are loaded
 }
 
-//
 // CreateDocumentLoader creates a document loader using the supplied DocumentParser interface
-// for parsing HTML documents loaded.
-//
 func CreateDocumentLoader(p DocumentParser) *DocLoader {
 	return &DocLoader{parser: p}
 }
 
-// LoadURL loads then parses a we document. See DocumentLoader interface for details.
+// LoadURL loads then parses a web document. See DocumentLoader interface for details.
 func (loader *DocLoader) LoadURL(urlStr string) (*WebPage, error) {
 	start := time.Now()
 	resp, err := http.Get(urlStr)
