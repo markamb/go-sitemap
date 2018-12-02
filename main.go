@@ -3,7 +3,7 @@
 //
 // **************************************************************************************************************
 // PLEASE NOTE: THIS IS MY FIRST ATTEMPT AT A GOLANG APPLICATION. SOME CODING STYLES, USE OF LIBRARIES AND USE OF
-// STANDARD PATTERNS (OR LACK THERE OF) MY NOT NOT BE IDEAL!
+// STANDARD PATTERNS (OR LACK THERE OF) MAY NOT NOT BE IDEAL!
 // **************************************************************************************************************
 //
 // Overview:
